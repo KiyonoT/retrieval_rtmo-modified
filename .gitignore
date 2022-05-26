@@ -9,6 +9,7 @@
 *.mat
 *.csv
 *.tif
+*.MATLABDriveTag
 src/loop_cubes*
 src/lut/
 measured/*

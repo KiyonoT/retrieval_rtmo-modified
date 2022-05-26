@@ -1,5 +1,5 @@
-# Retrieval
-
-Multispectral retrieval algorithm from canopy reflectance data with RTMo module of SCOPE model.
-
-Instructions can be found at https://scope-model.readthedocs.io/en/latest/retrieval.html
+# RTMo retrieval algorithm for moderate resolution images
+Modified from the version itc2020 (https://github.com/Prikaziuk/retrieval_rtmo).
+* retrievals from MAIAC BRF
+* correction of landscape-level clumping (i.e. fractional vegetation cover)
+* model parameter error estimation
