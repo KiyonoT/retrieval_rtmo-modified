@@ -1,10 +1,10 @@
 % function [er,params0,params1,spectral,leafbio,canopy,rad,reflSAIL_all,J,fluorescence]= master
 %% start fresh
 close all
-clear all
+clear all %#ok<CLALL>
 
 %% check compatibility
-data_queue_present = helpers.check_compatibility();
+[data_queue_present, N_proc] = helpers.check_compatibility(1);
 
 %% read fixed input
 fixed = io.read_fixed_input();
@@ -23,6 +23,7 @@ sensor = io.table_to_struct(tab_files, 'sensor');
 sun = io.table_to_struct(tab_files, 'sun');
 
 path.input_path = input_path;
+sensor.update_Kb = 1;
 
 %% read reflectance
 measured = io.read_measurements(path);
@@ -102,6 +103,13 @@ if sensor.timeseries
     sensor.angles_ts = ts.get_angles_ts(sensor, sun, path_ts, n_spectra);
     measured.sza = sensor.angles_ts.tts;  % to enable 3D lut with .txt
     sensor.Rin_ts = ts.get_Rin_ts(path_ts.Rin_path, sensor.Rin, n_spectra);
+    if ~isempty(path_ts.Apm_path)
+        Apm = readtable(path_ts.Apm_path, 'ReadRowNames', true);
+        Aps = readtable(path_ts.Aps_path, 'ReadRowNames', true);
+        if mean(Apm{'SMC',:}) < 1
+            Apm{'SMC',:} = Apm{'SMC',:}.*100;
+        end
+    end
 end
 %% preallocate output structures
 
@@ -205,16 +213,22 @@ else
     if ~exist('N_proc', 'var')
         N_proc = 1;
     end
-    eta = n_spectra * 10 / (N_proc * 60);
+    if sensor.update_Kb == 0
+        sec = 6;
+    else
+        sec = 24;
+    end
+    eta = n_spectra * sec / (N_proc * 60);
     fprintf(['You have %d spectra and asked for %d CPU(s). '...
-        'Fitting will take about %.2f min (~10 s / spectra / CPU)\n'], n_spectra, N_proc, eta)
+        'Fitting will take about %.2f min (~%d s / spectra / CPU)\n'], n_spectra, N_proc, eta, sec)
     
     %% change to parfor if you can
-    for j = c
+    parfor j = c
          fprintf('%d / %d', j, length(c))
         %% this part is done like it is to enable parfor loop
         measurement = struct();
         measurement.refl = measured.refl(:,j);
+        measurement.std = measured.std(:, j);
         measurement.i_fit = measured.i_fit;
         measurement.wl = measured.wl;
         measurement.i_sif = measured.i_sif;
@@ -229,11 +243,16 @@ else
 
         angles = angles_single;
         sensor_in = sensor;
+        Ap_j = '';
         if sensor_in.timeseries
             [angles, sensor_in.Rin] = ts.ts_for_parfor(j, sensor_in);
+            if ~isempty(path_ts.Apm_path)
+                Ap_j = struct('SMCm', Apm('SMC',j), 'LAIm', Apm('LAI',j), 'FVCm', Apm('FVC',j), ...
+                    'LAIs', Aps('LAI',j), 'FVCs', Aps('FVC',j));
+            end
         end
 
-        results_j = fit_spectra(measurement, tab, angles, irr_meas, fixed, sensor_in);
+        results_j = fit_spectra(measurement, tab, angles, irr_meas, fixed, sensor_in, Ap_j);
 
         %% record to keep in the workspace
         parameters(:, j) = results_j.parameters;
@@ -242,13 +261,13 @@ else
         refl_soil(:,j)  = results_j.soil_mod;
         sif_rad(:,j)  = results_j.sif;
         sif_norm(:,j) = results_j.sif_norm;
+        measurement.std = results_j.std_refl;
 
         %% uncertainty in parameters
-        measurement.std = measured.std(:, j);
         parameters_std(:, j) = 0;
-%         uncertainty_j = propagate_uncertainty(results_j.parameters, measurement, tab, angles,  irr_meas, fixed, sensor_in);
-%         parameters_std(:, j) = uncertainty_j.std_params;
-%         J_all(:,:,j) = uncertainty_j.J;
+        uncertainty_j = propagate_uncertainty(results_j.parameters, measurement, tab, angles,  irr_meas, fixed, sensor_in);
+        parameters_std(:, j) = uncertainty_j.std_params;
+        J_all(:,:,j) = uncertainty_j.J;
 
         figures(j) = plot.reflectance_hidden(measurement.wl, results_j.refl_mod, measurement.refl, j, results_j.rmse);
 
@@ -261,9 +280,11 @@ else
 
     end
     %% see figures you want (replace c(1) with the spectrum number)
-    set(figures(c(1)), 'Visible', 'on')
+%     set(figures(c(1)), 'Visible', 'on')
 end
 %% if your parfor does not fail try disabling send
+delete(gcp('nocreate'))
+clear data_queue_present
 io.save_output(path, rmse_all, parameters, parameters_std, measured.refl, refl_mod, refl_soil, sif_norm, sif_rad)
 
 if ~isempty(path.validation)

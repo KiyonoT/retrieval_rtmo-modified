@@ -5,6 +5,10 @@ function values = demodify_parameters(values, varnames)
     % LAI from exponential to linear
     i_lai = strcmp('LAI', varnames);
     values(i_lai, :) = -5 * log(1 - values(i_lai, :));  % if i_lai is empty => no assignment
+    if any(strcmp(varnames, 'FVC'))
+        i_fvc = strcmp(varnames, 'FVC');
+        values(i_lai, :) = values(i_lai, :) .* values(i_fvc, :);
+    end
     
     % abs(LIDFa + LIDFb) <= 1
     i_lidfa = strcmp('LIDFa', varnames);

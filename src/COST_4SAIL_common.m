@@ -1,4 +1,4 @@
-function [er, rad, refl, rmse, soil, fluo] = COST_4SAIL_common(p, measurement, tab, angles, ...
+function [er, rad, refl, rmse, soil, fluo, meas_std] = COST_4SAIL_common(p, measurement, tab, angles, ...
                                                                irr_meas, fixed, sensor)
     % COST_4SAIL_my
     % RETURNS
@@ -26,7 +26,9 @@ function [er, rad, refl, rmse, soil, fluo] = COST_4SAIL_common(p, measurement, t
     %% leaf reflectance - Fluspect
     leafbio.fqe(2)  = 0.02;                     % quantum yield
     leafbio.fqe(1)  = 0.02 / 5;
-    leafbio.V2Z     = 0;
+    if ~any(strcmp(tab.variable, 'V2Z'))
+        leafbio.V2Z = 0;
+    end
 
 %     leafopt = models.fluspect_B_CX_PSI_PSII_combined(spectral, leafbio, optipar);
     leafopt = models.fluspect_lite(spectral, leafbio, optipar);
@@ -69,12 +71,15 @@ function [er, rad, refl, rmse, soil, fluo] = COST_4SAIL_common(p, measurement, t
 
     %% canopy reflectance in measurements wl
     if isfield(sensor, 'srf')
-        [refl, soil_refl, fluo] = to_sensor.rtmo2srf_refl(rad, SIF, soil.refl, spectral.wlP, irr_meas, sensor);
+        [refl, soil_refl, fluo] = to_sensor.rtmo2srf_brf(rad, SIF, soil.refl, spectral.wlP, irr_meas, sensor);
+%         [refl, soil_refl, fluo] = to_sensor.rtmo2srf_refl(rad, SIF, soil.refl, spectral.wlP, irr_meas, sensor);
 %         [refl, soil_refl, fluo] = to_sensor.rtmo2srf_radiance(rad, SIF, soil.refl, spectral.wlP, irr_meas, sensor);
         if isfield(measurement, 'xa')
             y = refl ./ (1 - refl .* measurement.xc);
             toa = (y + measurement.xb) ./ measurement.xa;
             er1 = toa - measurement.rad;
+        elseif any(strcmp(tab.variable, 'FVC'))
+            er1 = (refl*canopy.FVC + soil_refl*(1-canopy.FVC)) - measurement.refl;
         else
             er1 = refl - measurement.refl;
         end
@@ -86,19 +91,34 @@ function [er, rad, refl, rmse, soil, fluo] = COST_4SAIL_common(p, measurement, t
     
     soil.refl_in_meas  = soil_refl;
     
+    %% extra weight from prior information
+    prior.Apm = tab.x0(tab.include);
+    prior.Apm(strcmp(tab.variable(tab.include),'Cca')) = 0.25*leafbio.Cab; % Note: 1 + 0.22*Cab (LOPEX + ANGERS); 2 + 0.19*Cab (Sims & Gamon 2002)
+    prior.Aps = tab.uncertainty(tab.include);
+    er2 = (p - prior.Apm) ./ prior.Aps; 
+    
     %% calculate the difference between measured and modeled data
-
+    if sensor.update_Kb == 0
+        meas_std = measurement.std;
+    else
+        epsilon = measurement.std; % instrumental noise
+        epsilon(isnan(epsilon)) = Inf;
+        
+        % add model error (see Rodgers 2000, Sect 3)
+        tab.include = ~tab.include;
+        tab.include(contains(tab.variable, ["SIF","V2Z"])) = 0;
+        Sb = tab.uncertainty(tab.include);
+        tab = helpers.modify_tab_parameters(tab);
+        Kb = helpers.clc_jacobian(refl*canopy.FVC+soil_refl*(1-canopy.FVC), ...
+                                  measurement, tab, angles, irr_meas, fixed, sensor);
+        meas_std = diag((diag(epsilon.^2) + Kb*diag(Sb.^2)*Kb.').^0.5); % noise + RTMo parameter error
+    end
+    
+    er = er1(~isnan(er1)) ./ meas_std(~isnan(er1));
     er1 = er1(~isnan(er1));
     
-    %% add extra weight from prior information
-    prior.Apm = tab.x0(tab.include);
-    prior.Aps = tab.uncertainty(tab.include);
-    
-    er2 = 0;
-%     er2 = (p - prior.Apm) ./ prior.Aps; 
-    
     %% total error
-    er = [er1 ; 3E-2* er2];
+    er = [er ; er2];
 
     rmse = sqrt((er1' * er1) ./ numel(er1));
 

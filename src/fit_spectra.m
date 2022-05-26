@@ -1,13 +1,44 @@
-function results = fit_spectra(measurement, tab, angles, irr_meas, fixed, sensor_in)
+function results = fit_spectra(measurement, tab, angles, irr_meas, fixed, sensor_in, apriori)
 
-    %% here modification of parameters should occur
-    tab = helpers.modify_tab_parameters(tab);
+    if ~isempty(apriori)
+        tab(strcmp(tab.variable,'SMC'), 'value') = apriori.SMCm;
+        tab(strcmp(tab.variable,'LAI'), 'value') = apriori.LAIm;
+        tab(strcmp(tab.variable,'FVC'), 'value') = apriori.FVCm;
+
+        tab(strcmp(tab.variable,'LAI'), 'uncertainty') = apriori.LAIs;
+        tab(strcmp(tab.variable,'FVC'), 'uncertainty') = apriori.FVCs;
+    end
+    
+    if sensor_in.update_Kb == 0
+        %% measurement error (see Rodgers 2000, Sect 3)
+        epsilon = measurement.std; % instrumental noise
+        epsilon(isnan(epsilon)) = Inf;
+        iparams = tab.include;
+
+        tab.include = ~tab.include;
+        tab.include(contains(tab.variable, ["SIF","V2Z"])) = 0;
+        Sb = tab.uncertainty(tab.include);
+
+        % here modification of parameters should occur
+        tab = helpers.modify_tab_parameters(tab);
         
-    %% save prior (x0) values
-    tab.x0 = tab.value;
+        % save prior (x0) values
+        tab.x0 = tab.value;
+    
+        Kb = helpers.clc_jacobian(-999, measurement, tab, angles, irr_meas, fixed, sensor_in);
+        measurement.std = diag((diag(epsilon.^2) + Kb*diag(Sb.^2)*Kb.').^0.5); % noise + RTMo parameter error
+        tab.include = iparams;
+    else
+        %% here modification of parameters should occur
+        tab = helpers.modify_tab_parameters(tab);
+        
+        %% save prior (x0) values
+        tab.x0 = tab.value;
+
+        iparams = tab.include;
+    end
     
     %% initial parameter values, and boundary boxes
-    iparams = tab.include;
     params0 = tab.value(iparams);
     lb = tab.lower(iparams);
     ub = tab.upper(iparams);
@@ -34,7 +65,7 @@ function results = fit_spectra(measurement, tab, angles, irr_meas, fixed, sensor
     results.parameters = helpers.demodify_parameters(tab.value, tab.variable);
 
     %% best-fittiing spectra
-    [er, rad, reflSAIL, rmse, soil, fluo] = f(paramsout);
+    [er, rad, reflSAIL, rmse, soil, fluo, meas_std] = f(paramsout);
     
     results.rmse = rmse;
     results.refl_mod = reflSAIL;
@@ -42,5 +73,6 @@ function results = fit_spectra(measurement, tab, angles, irr_meas, fixed, sensor
     results.sif_norm = fluo.SIFnorm;
     results.soil_mod = soil.refl_in_meas;
     results.exitflag = exitflag;
+    results.std_refl = meas_std;
     
 end

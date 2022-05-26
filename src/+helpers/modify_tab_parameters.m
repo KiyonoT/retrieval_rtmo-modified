@@ -2,6 +2,10 @@ function tab = modify_tab_parameters(tab)
     %% modify LAI
     transform_lai = @(x) 1 - exp(-0.2 * x);
     i_lai = strcmp(tab.variable, 'LAI');
+    if any(strcmp(tab.variable, 'FVC'))
+        i_fvc = strcmp(tab.variable, 'FVC');
+        tab.value(i_lai) = tab.value(i_lai)/tab.value(i_fvc);
+    end
 
     tab.value(i_lai) = transform_lai(tab.value(i_lai));
     tab.lower(i_lai) = transform_lai(tab.lower(i_lai));

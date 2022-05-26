@@ -1,4 +1,4 @@
-function data_queue_present = check_compatibility()
+function [data_queue_present, N_proc] = check_compatibility(parallel)
 
     ver_out = ver;
     toolboxes = {ver_out.Name};
@@ -22,18 +22,22 @@ function data_queue_present = check_compatibility()
             fprintf(['You have Parallel Computing Toolbox,\n'...
                 'If you want you can use parfor loop instead of for loop (slower but the results are not lost in case)\n'])
         end
-        %% parallel computing
-        % uncomment these lines
-        % select N_proc you want (<= CPUs)
-        % change for-loop to parfor-loop somewhere in main.m or main_sat.m
-        % parfor will also work by itself, these lines just keep the number of processes under control
-
-        % N_proc = 3;
-        % if isempty(gcp('nocreate'))
-        % %     prof = parallel.importProfile('local_Copy.settings');
-        % %     parallel.defaultClusterProfile(prof);
-        %     parpool(N_proc, 'IdleTimeout', Inf);
-        % end
+        
+        if parallel
+            %% parallel computing
+            % uncomment these lines
+            % select N_proc you want (<= CPUs)
+            % change for-loop to parfor-loop somewhere in main.m or main_sat.m
+            % parfor will also work by itself, these lines just keep the number of processes under control
+            N_proc = feature('numcores');
+            if isempty(gcp('nocreate'))
+                %     prof = parallel.importProfile('local_Copy.settings');
+                %     parallel.defaultClusterProfile(prof);
+                parpool(N_proc, 'IdleTimeout', Inf);
+            end        
+        else
+            N_proc = 4;
+        end
     else
         fprintf('You do not have Parallel Computing Toolbox but it is ok\n')
     end
