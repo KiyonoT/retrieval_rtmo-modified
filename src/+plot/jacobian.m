@@ -11,7 +11,7 @@ function jacobian(J2, tab, fit_wl, j)
     ncol = ceil(n_fit_params / nrow);
 
     coeff = repmat(UB - LB, size(J2, 1), 1);
-    J_norm = J2(:, iparams) .* coeff;
+    J_norm = J2(:, iparams, j) .* coeff;
 
     for k = 1:n_fit_params
         subplot(nrow, ncol, k)

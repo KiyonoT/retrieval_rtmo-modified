@@ -22,11 +22,21 @@ function path = initialize_xlsx_out(path, measured, var_names, n_spectra, fluo_w
     excel_columns = num2cell('A':'Z');
 %     n_col = size(measured.refl, 2);
     n_col = n_spectra;
-    repeats = fix(n_col / length(excel_columns));  % integer part
     col_needed = excel_columns;
+    if n_col < 26^2
+    repeats = fix(n_col / length(excel_columns));  % integer part
     for i=1:repeats
         col_extra = strcat(excel_columns{i}, excel_columns);
         col_needed = [col_needed, col_extra];
+    end
+    elseif n_col < 26^3
+        repeats = fix(n_col / 26^2);
+        for j=1:repeats
+            for i=1:26
+                col_extra = strcat(excel_columns{j}, excel_columns{i}, excel_columns);
+                col_needed = [col_needed, col_extra];
+            end
+        end
     end
     col_needed = strcat(col_needed, '2'); % in '1' there is header on each sheet
      

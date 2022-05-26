@@ -11,7 +11,7 @@ function jacobian_svd(J2, tab, fit_wl, j)
     ncol = ceil(n_fit_params / nrow);
 
     coeff = repmat(UB - LB, size(J2, 1), 1);
-    J_norm = J2(:, iparams) .* coeff;
+    J_norm = J2(:, iparams, j) .* coeff;
 
     [U,S,V] = svd(J_norm, 0);
     diagS = diag(S);
@@ -22,9 +22,11 @@ function jacobian_svd(J2, tab, fit_wl, j)
 
         xlim([min(fit_wl), max(fit_wl)])
 
-        str1 = sprintf('U %s', parnames{k});
+        str1 = sprintf('U %d', k);
         str2 = sprintf('S=%0.2f', diagS(k));
         title({str1, str2},'FontSize',9) 
     end
     sgtitle(sprintf('SVD of Jacobian for spectra # %d', j))
+
+    V
 end
