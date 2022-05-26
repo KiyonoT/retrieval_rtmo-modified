@@ -11,10 +11,11 @@ function fixed = read_fixed_input()
 
     %% fixed input for FLUSPECT and BSM
     optipar = load(fullfile('..', 'input', 'fluspect_data', 'Optipar2017_ProspectD'));
+%     optipar.optipar.Ks = table2array(readtable(fullfile('..', 'input', 'fluspect_data', 'Ks_Pacheco-Labrador_etal_2021.txt')));
     
     %% collect
     fixed.spectral = spectral;
     fixed.pcf = pcf;
     fixed.optipar = optipar.optipar;
-    fixed.srf_sensors = {'OLCI', 'MSI', 'altum_multispec', 'SLSTR', 'Synergy', 'Synergy_official'};
+    fixed.srf_sensors = {'OLCI', 'MSI', 'altum_multispec', 'SLSTR', 'Synergy', 'Synergy_official', 'MODIS_Aqua'};
 end
